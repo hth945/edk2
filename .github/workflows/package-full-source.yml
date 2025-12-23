@@ -15,22 +15,20 @@ jobs:
   package-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 必须！用于创建 GitHub Release
+      contents: write  # 必须！用于创建 Release
 
     steps:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1  # 浅克隆，加快速度
+          fetch-depth: 1
 
       - name: Remove all Git-related files and directories
         run: |
           echo "🗑️ Removing .git directories and Git config files..."
-          # 删除主仓库和子模块的 .git 目录
           rm -rf .git
           find . -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
-          # 删除 Git 配置文件（用户不需要）
           rm -f .gitmodules .gitignore .gitattributes .mailmap
 
       - name: Show directory structure BEFORE packing
@@ -42,16 +40,12 @@ jobs:
         run: |
           REPO_NAME="${{ github.event.repository.name }}"
           TAG="${{ github.event.inputs.tag }}"
-          # 清理 tag 中的非法字符（如 /, #, 空格等）
           SAFE_TAG=$(echo "$TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
           ARCHIVE_NAME="${REPO_NAME}-${SAFE_TAG}.tar.gz"
 
           echo "📦 Creating archive: $ARCHIVE_NAME"
-
-          # 等待 2 秒，确保无后台写入
           sleep 2
 
-          # 创建临时干净副本
           mkdir -p /tmp/clean-repo
           rsync -a \
             --exclude='.git' \
@@ -77,19 +71,30 @@ jobs:
             --exclude='Thumbs.db' \
             . /tmp/clean-repo/
 
-          # 进入临时目录，打包并添加顶层目录名
           cd /tmp/clean-repo
           tar --transform "s,^,${REPO_NAME}-${SAFE_TAG}/," -czf "../$ARCHIVE_NAME" .
 
-          # 移回原工作区
           mv "../$ARCHIVE_NAME" .
+          echo "✅ Archive created: $ARCHIVE_NAME"
 
-          echo "✅ Archive created successfully."
-
-      - name: Publish to GitHub Releases
-        uses: softprops/action-gh-release@v2
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.inputs.tag }}
-          name: Release ${{ github.event.inputs.tag }}
+          release_name: Release ${{ github.event.inputs.tag }}
           body: ${{ github.event.inputs.notes || 'Automated source package with submodules (no Git history)' }}
-          files: "*.tar.gz"
+          draft: false
+          prerelease: false
+
+      - name: Upload custom archive to Release
+        uses: actions/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ env.ARCHIVE_NAME }}
+          asset_name: ${{ env.ARCHIVE_NAME }}
+          asset_content_type: application/gzip
