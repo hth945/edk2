@@ -1,36 +1,70 @@
-name: Package Full Source with Submodules
+name: Package Source & Submodules → Release (No History)
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      notes:
+        description: 'Release notes'
+        required: false
 
 jobs:
-  package:
+  package-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 必须！用于创建 Release
+
     steps:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
+          fetch-depth: 1  # 浅克隆，加快速度
 
-      - name: Remove .git directories
+      - name: Remove all .git directories (no history)
         run: |
-          sleep 1
+          echo "🗑️ Removing .git directories..."
           rm -rf .git
           find . -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
 
-      - name: Create clean archive
+      - name: Show directory structure BEFORE packing
         run: |
-          sleep 2
-          mkdir /tmp/clean-repo
-          rsync -a --exclude='.git' . /tmp/clean-repo/
-          cd /tmp/clean-repo
-          tar -czf ../repo-full-no-history.tar.gz .
-          mv ../repo-full-no-history.tar.gz ..
+          echo "🔍 Files and folders that will be packed:"
+          ls -laR
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Create clean source archive
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          TAG="${{ github.event.inputs.tag }}"
+          # 清理 tag 中的非法字符
+          SAFE_TAG=$(echo "$TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          ARCHIVE_NAME="${REPO_NAME}-${SAFE_TAG}.tar.gz"
+
+          echo "📦 Creating archive: $ARCHIVE_NAME"
+
+          tar \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='__pycache__' \
+            --exclude='.DS_Store' \
+            --exclude='*.log' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='build' \
+            --exclude='dist' \
+            --transform "s,^,${REPO_NAME}-${SAFE_TAG}/," \
+            -czf "$ARCHIVE_NAME" .
+
+          echo "✅ Archive created successfully."
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: full-source-with-submodules
-          path: repo-full-no-history.tar.gz
-          retention-days: 7
+          tag_name: ${{ github.event.inputs.tag }}
+          name: Release ${{ github.event.inputs.tag }}
+          body: ${{ github.event.inputs.notes || 'Automated source package (no git history)' }}
+          files: "*.tar.gz"
