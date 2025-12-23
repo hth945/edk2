@@ -24,6 +24,14 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      - name: Set up absolute paths
+        id: paths
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          WORKSPACE="/home/runner/work/$REPO_NAME/$REPO_NAME"
+          echo "WORKSPACE=$WORKSPACE" >> $GITHUB_ENV
+          echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
+
       - name: Remove all Git-related files and directories
         run: |
           echo "🗑️ Removing .git directories and Git config files..."
@@ -36,17 +44,29 @@ jobs:
           echo "🔍 Files and folders that will be packed:"
           ls -laR
 
-      - name: Create clean source archive safely
+      - name: Create clean source archive using absolute paths
         run: |
-          REPO_NAME="${{ github.event.repository.name }}"
+          REPO_NAME="${{ env.REPO_NAME }}"
           TAG="${{ github.event.inputs.tag }}"
           SAFE_TAG=$(echo "$TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
           ARCHIVE_NAME="${REPO_NAME}-${SAFE_TAG}.tar.gz"
+          WORKSPACE="${{ env.WORKSPACE }}"
 
-          echo "📦 Creating archive: $ARCHIVE_NAME"
-          sleep 2
+          CLEAN_DIR="/tmp/clean-repo"
+          ARCHIVE_PATH="$WORKSPACE/$ARCHIVE_NAME"
 
-          mkdir -p /tmp/clean-repo
+          echo "📦 REPO_NAME: $REPO_NAME"
+          echo "📦 TAG: $TAG"
+          echo "📦 SAFE_TAG: $SAFE_TAG"
+          echo "📦 ARCHIVE_NAME: $ARCHIVE_NAME"
+          echo "📦 WORKSPACE: $WORKSPACE"
+          echo "📦 CLEAN_DIR: $CLEAN_DIR"
+          echo "📦 ARCHIVE_PATH: $ARCHIVE_PATH"
+
+          # 确保工作区干净
+          mkdir -p "$CLEAN_DIR"
+
+          # 同步当前目录到临时目录（排除不需要的）
           rsync -a \
             --exclude='.git' \
             --exclude='.github' \
@@ -69,22 +89,30 @@ jobs:
             --exclude='dist' \
             --exclude='*.log' \
             --exclude='Thumbs.db' \
-            . /tmp/clean-repo/
+            "$WORKSPACE/" "$CLEAN_DIR/"
 
-          cd /tmp/clean-repo
-          tar --transform "s,^,${REPO_NAME}-${SAFE_TAG}/," -czf "../$ARCHIVE_NAME" .
+          # 打包：添加顶层目录名
+          cd "$CLEAN_DIR"
+          tar --transform "s,^,${REPO_NAME}-${SAFE_TAG}/," -czf "$ARCHIVE_PATH" .
 
-          mv "../$ARCHIVE_NAME" .
-          echo "✅ Archive created: $ARCHIVE_NAME"
+          # 验证文件存在
+          if [ ! -f "$ARCHIVE_PATH" ]; then
+            echo "❌ Failed to create archive at: $ARCHIVE_PATH"
+            exit 1
+          fi
 
-          # ✅ 导出到环境变量，供后续步骤使用
+          echo "✅ Archive created successfully at: $ARCHIVE_PATH"
           echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+
+      - name: Debug: Confirm archive exists
+        run: |
+          ls -lh "${{ env.ARCHIVE_PATH }}"
+          file "${{ env.ARCHIVE_PATH }}"
 
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event.inputs.tag }}
           release_name: Release ${{ github.event.inputs.tag }}
@@ -94,10 +122,8 @@ jobs:
 
       - name: Upload custom archive to Release
         uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ env.ARCHIVE_NAME }}
-          asset_name: ${{ env.ARCHIVE_NAME }}  # ✅ 现在可以用了
+          asset_path: ${{ env.ARCHIVE_PATH }}
+          asset_name: ${{ env.ARCHIVE_NAME }}
           asset_content_type: application/gzip
