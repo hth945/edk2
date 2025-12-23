@@ -80,6 +80,15 @@ jobs:
           # ✅ 导出到环境变量，供后续步骤使用
           echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 10  # 自动超时断开
+
+      - name: Continue other steps (won't run until you exit tmate)
+        run: |
+          echo "You won't see this until you exit the tmate session!"
+
+          
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
@@ -98,6 +107,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /tmp/${{ env.ARCHIVE_NAME }}
+          asset_path: /tmp/clean-repo/${{ env.ARCHIVE_NAME }}
           asset_name: ${{ env.ARCHIVE_NAME }}  # ✅ 现在可以用了
           asset_content_type: application/gzip
