@@ -15,7 +15,7 @@ jobs:
   package-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 必须！用于创建 Release
+      contents: write
 
     steps:
       - name: Checkout repository with submodules
@@ -77,6 +77,9 @@ jobs:
           mv "../$ARCHIVE_NAME" .
           echo "✅ Archive created: $ARCHIVE_NAME"
 
+          # ✅ 导出到环境变量，供后续步骤使用
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
+
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
@@ -96,5 +99,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./${{ env.ARCHIVE_NAME }}
-          asset_name: ${{ env.ARCHIVE_NAME }}
+          asset_name: ${{ env.ARCHIVE_NAME }}  # ✅ 现在可以用了
           asset_content_type: application/gzip
