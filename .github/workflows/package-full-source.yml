@@ -1,4 +1,4 @@
-name: Package Full Source with Submodules
+name: Package Full Source with Submodules (No History)
 
 on:
   workflow_dispatch:  # 手动触发
@@ -7,20 +7,27 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository with submodules
+      - name: Checkout repository with submodules (shallow)
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
+          fetch-depth: 1   # 只拉取最新一次 commit，不拉历史
 
-      - name: Create archive (in current directory)
+      - name: Remove .git directories (clean source only)
         run: |
-          # 打包当前目录所有内容（包括 .git 和子模块）
-          tar -czf repo-full.tar.gz .
+          # 先等待 1 秒，确保 Git 操作结束
+          sleep 1
+          # 删除主仓库的 .git
+          rm -rf .git
+          # 删除所有子模块的 .git 目录
+          find . -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
+
+      - name: Create clean archive
+        run: tar -czf repo-full-no-history.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: full-source-with-submodules
-          path: repo-full.tar.gz      # ✅ 合法路径：当前目录下的文件
+          name: full-source-with-submodules-no-history
+          path: repo-full-no-history.tar.gz
           retention-days: 7
