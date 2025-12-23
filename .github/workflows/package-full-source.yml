@@ -2,7 +2,6 @@ name: Package Full Source with Submodules
 
 on:
   workflow_dispatch:  # 手动触发
-  # 也可以加 schedule 或 push 触发
 
 jobs:
   package:
@@ -11,17 +10,17 @@ jobs:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
-          submodules: recursive  # 关键！自动初始化并更新所有子模块
-          fetch-depth: 0         # 获取完整历史（可选）
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: Create archive
+      - name: Create archive (in current directory)
         run: |
-          cd ..
-          tar -czf repo-full.tar.gz ${{ github.event.repository.name }}
+          # 打包当前目录所有内容（包括 .git 和子模块）
+          tar -czf repo-full.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: full-source-with-submodules
-          path: ../repo-full.tar.gz
+          path: repo-full.tar.gz      # ✅ 合法路径：当前目录下的文件
           retention-days: 7
