@@ -1,0 +1,27 @@
+name: Package Full Source with Submodules
+
+on:
+  workflow_dispatch:  # 手动触发
+  # 也可以加 schedule 或 push 触发
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive  # 关键！自动初始化并更新所有子模块
+          fetch-depth: 0         # 获取完整历史（可选）
+
+      - name: Create archive
+        run: |
+          cd ..
+          tar -czf repo-full.tar.gz ${{ github.event.repository.name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-source-with-submodules
+          path: ../repo-full.tar.gz
+          retention-days: 7
