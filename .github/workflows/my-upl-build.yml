@@ -10,8 +10,6 @@ name: UPL Build
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['master']
 
   build_gcc:
     strategy:
