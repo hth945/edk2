@@ -114,13 +114,19 @@ jobs:
           TAG="${{ github.event.inputs.tag }}"
           SAFE_TAG=$(echo "$TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
           ARCHIVE_NAME="${REPO_NAME}-${SAFE_TAG}.tar.gz"
-
           echo "📦 Creating archive: $ARCHIVE_NAME"
 
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 10  # 自动超时断开
+
+          mkdir -p /tmp/clean-repo
+          sleep 2
+          ls -al
+          tar -czvf "/tmp/clean-repo/$ARCHIVE_NAME" .
+
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+      #   timeout-minutes: 10  # 自动超时断开
 
 
 
